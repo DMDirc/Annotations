@@ -1,13 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="Annotations" default="default" basedir=".">
     <description>Builds, tests, and runs the project Annotations.</description>
+
+    <property name="git.dir" value=".git"/>
+    <property name="manifest.file" value="manifest.mf"/>
+
     <import file="nbproject/build-impl.xml"/>
     <import file="build-ivy.xml"/>
+    <import file="build-versioning.xml"/>
 
     <target name="-init-lib-directory">
       <mkdir dir="lib"/>
     </target>
 
-    <target name="-pre-init" depends="-init-dependencies"/>
+    <target name="-pre-init" depends="-init-dependencies,-add-version"/>
+    <target name="-post-jar">
+        <delete file="${manifest.file}"/>
+    </target>
+    <target name="-post-test-run">
+        <delete file="${manifest.file}"/>
+    </target>
 
 </project>
