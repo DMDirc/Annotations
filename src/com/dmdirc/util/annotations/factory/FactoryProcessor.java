@@ -22,7 +22,7 @@
 
 package com.dmdirc.util.annotations.factory;
 
-import java.io.BufferedWriter;
+import com.dmdirc.util.annotations.util.SourceFileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,11 +37,11 @@ import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.tools.Diagnostic;
-import javax.tools.JavaFileObject;
 
 /**
  * Processor for the {@link Factory} annotation.
@@ -86,98 +86,60 @@ public class FactoryProcessor extends AbstractProcessor {
             }
 
             try {
-                JavaFileObject jfo = processingEnv.getFiler().createSourceFile(typeElement.getQualifiedName() + "Factory");
-                BufferedWriter bw = new BufferedWriter(jfo.openWriter());
-
-                if (!packageElement.getQualifiedName().contentEquals("")) {
-                    // Don't write a package line for default packages
-                    bw.append("package ")
-                            .append(packageElement.getQualifiedName())
-                            .append(';');
-                    bw.newLine();
-                    bw.newLine();
-                }
+                final SourceFileWriter writer = new SourceFileWriter(
+                        processingEnv.getFiler(),
+                        typeElement.getQualifiedName() + "Factory");
 
                 final String factoryName = typeElement.getSimpleName() + "Factory";
                 final String methodName = "get" + typeElement.getSimpleName();
 
-                bw.append("@javax.annotation.Generated(\"")
-                        .append(getClass().getCanonicalName())
-                        .append("\")");
-                bw.newLine();
-                bw.append("public class " + factoryName + " {");
-                bw.newLine();
-                bw.newLine();
+                writer.writePackageDeclaration(packageElement.getQualifiedName().toString())
+                        .writeClassDeclaration(factoryName, getClass());
 
+                // All the fields we need
                 for (Parameter boundParam : boundParameters) {
-                    bw.append("    private final ")
-                            .append(boundParam.getType())
-                            .append(' ')
-                            .append(boundParam.getName())
-                            .append(";");
-                    bw.newLine();
-                    bw.newLine();
+                    writer.writeField(boundParam.getType(), boundParam.getName(),
+                            Modifier.PRIVATE, Modifier.FINAL);
                 }
 
-                if (annotation.inject()) {
-                    bw.append("    @javax.inject.Inject");
-                    bw.newLine();
-                }
+                // Constructor declaration
+                writer.writeAnnotationIf("@javax.inject.Inject", annotation.inject())
+                        .writeAnnotationIf("@javax.inject.Singleton", annotation.singleton())
+                        .writeConstructorDeclarationStart(factoryName, Modifier.PUBLIC);
+                writeMethodParameters(writer, boundParameters);
+                writer.writeMethodDeclarationEnd();
 
-                if (annotation.singleton()) {
-                    bw.append("    @javax.inject.Singleton");
-                    bw.newLine();
-                }
-
-                bw.append("    public " + factoryName + "(");
-                writeMethodParameters(bw, boundParameters);
-                bw.append(") {");
-                bw.newLine();
+                // Assign the values to fields
                 for (Parameter boundParam : boundParameters) {
-                    bw.append("        this.")
-                            .append(boundParam.getName())
-                            .append(" = ")
-                            .append(boundParam.getName())
-                            .append(';');
-                    bw.newLine();
+                    writer.writeFieldAssignment(boundParam.getName(), boundParam.getName());
                 }
-                bw.append("    }");
-                bw.newLine();
-                bw.newLine();
 
+                // End of constructor
+                writer.writeBlockEnd();
+
+                // Write each factory method out in turn
                 for (List<Parameter> params : allParameters) {
                     final List<Parameter> unbound = new ArrayList<>(params);
                     unbound.removeAll(boundParameters);
 
-                    bw.append("    public " + typeElement.getSimpleName() + " " + methodName + "(");
-                    writeMethodParameters(bw, unbound);
-                    bw.append(") {");
-                    bw.newLine();
-
-                    bw.append("        return new " + typeElement.getSimpleName() + "(");
-
-                    boolean first = true;
-                    for (Parameter param : params) {
-                        if (!first) {
-                            bw.append(',');
-                        }
-                        first = false;
-
-                        bw.newLine();
-                        bw.append("                ").append(param.getName());
+                    final String[] parameters = new String[params.size()];
+                    for (int i = 0; i < parameters.length; i++) {
+                        parameters[i] = params.get(i).getName();
                     }
 
-                    bw.append(");");
-                    bw.newLine();
-
-                    bw.append("    }");
-                    bw.newLine();
-                    bw.newLine();
+                    writer.writeMethodDeclarationStart(
+                            typeElement.getSimpleName().toString(), methodName, Modifier.PUBLIC);
+                    writeMethodParameters(writer, unbound);
+                    writer.writeMethodDeclarationEnd()
+                            .writeReturnStart()
+                            .writeNewInstance(typeElement.getSimpleName().toString(), parameters)
+                            .writeStatementEnd()
+                            .writeBlockEnd();
                 }
 
-                bw.append("}");
-                bw.newLine();
-                bw.close();
+                // Done!
+                writer.writeBlockEnd();
+                writer.close();
             } catch (IOException ex) {
                 processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Unable to write factory file: " + ex.getMessage(), type);
             }
@@ -187,16 +149,11 @@ public class FactoryProcessor extends AbstractProcessor {
         return false;
     }
 
-    private void writeMethodParameters(final BufferedWriter bw, final List<Parameter> parameters) throws IOException {
-        boolean first = true;
-        for (Parameter boundParam : parameters) {
-            if (!first) {
-                bw.append(',');
-            }
-            first = false;
-
-            bw.newLine();
-            bw.append("            final " + boundParam);
+    private void writeMethodParameters(final SourceFileWriter writer, final List<Parameter> parameters) throws IOException {
+        for (Parameter param : parameters) {
+            writer.writeMethodParameter(
+                    param.getAnnotations(), param.getType(),
+                    param.getName(), Modifier.FINAL);
         }
     }
 
