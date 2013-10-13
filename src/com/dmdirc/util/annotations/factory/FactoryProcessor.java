@@ -55,6 +55,10 @@ public class FactoryProcessor extends AbstractProcessor {
         for (Element type : roundEnv.getElementsAnnotatedWith(Factory.class)) {
             Factory annotation = type.getAnnotation(Factory.class);
 
+            if (annotation == null) {
+                continue;
+            }
+
             final TypeElement typeElement = (TypeElement) type;
             final PackageElement packageElement = (PackageElement) typeElement.getEnclosingElement();
 
@@ -99,17 +103,23 @@ public class FactoryProcessor extends AbstractProcessor {
     /**
      * Writes all of the given parameters as method parameters.
      *
+     * @param annotation The annotation configuring the factory. {@code null} to use defaults.
      * @param writer The writer to write to.
      * @param parameters The parameters to be written.
      * @throws IOException If the operation failed.
      */
     private void writeMethodParameters(
+            final Factory annotation,
             final SourceFileWriter writer,
             final List<Parameter> parameters) throws IOException {
         for (Parameter param : parameters) {
             writer.writeMethodParameter(
-                    param.getAnnotations(), param.getType(),
-                    param.getName(), Modifier.FINAL);
+                    param.getAnnotations(),
+                    annotation != null && annotation.providers() ?
+                            maybeWrapProvider(annotation, param.getType()) :
+                            param.getType(),
+                    param.getName(),
+                    Modifier.FINAL);
         }
     }
 
@@ -156,19 +166,21 @@ public class FactoryProcessor extends AbstractProcessor {
             final String methodName = "get" + typeName;
 
             writer.writePackageDeclaration(packageName)
+                    .writeAnnotationIf("@javax.inject.Singleton", annotation.singleton())
                     .writeClassDeclaration(factoryName, getClass());
 
             // All the fields we need
             for (Parameter boundParam : boundParameters) {
-                writer.writeField(boundParam.getType(), boundParam.getName(),
+                writer.writeField(
+                        maybeWrapProvider(annotation, boundParam.getType()),
+                        boundParam.getName(),
                         Modifier.PRIVATE, Modifier.FINAL);
             }
 
             // Constructor declaration
             writer.writeAnnotationIf("@javax.inject.Inject", annotation.inject())
-                    .writeAnnotationIf("@javax.inject.Singleton", annotation.singleton())
                     .writeConstructorDeclarationStart(factoryName, Modifier.PUBLIC);
-            writeMethodParameters(writer, boundParameters);
+            writeMethodParameters(annotation, writer, boundParameters);
             writer.writeMethodDeclarationEnd();
 
             // Assign the values to fields
@@ -186,11 +198,17 @@ public class FactoryProcessor extends AbstractProcessor {
 
                 final String[] parameters = new String[params.size()];
                 for (int i = 0; i < parameters.length; i++) {
-                    parameters[i] = params.get(i).getName();
+                    if (annotation.providers()
+                            && !params.get(i).getType().startsWith("javax.inject.Provider")
+                            && boundParameters.contains(params.get(i))) {
+                        parameters[i] = params.get(i).getName() + ".get()";
+                    } else {
+                        parameters[i] = params.get(i).getName();
+                    }
                 }
 
                 writer.writeMethodDeclarationStart(typeName, methodName, Modifier.PUBLIC);
-                writeMethodParameters(writer, unbound);
+                writeMethodParameters(null, writer, unbound);
                 writer.writeMethodDeclarationEnd()
                         .writeReturnStart()
                         .writeNewInstance(typeName, parameters)
@@ -203,6 +221,22 @@ public class FactoryProcessor extends AbstractProcessor {
         } catch (IOException ex) {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
                     "Unable to write factory file: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Writes the given type in a Provider&lt;&gt;, if the factory is configured to use them,
+     * and the type is not already a provider.
+     *
+     * @param annotation The annotation configuring the factory.
+     * @param type The type to possibly wrap.
+     * @return The possibly-wrapped type.
+     */
+    private String maybeWrapProvider(final Factory annotation, final String type) {
+        if (annotation.providers() && !type.startsWith("javax.inject.Provider")) {
+            return "javax.inject.Provider<" + type + ">";
+        } else {
+            return type;
         }
     }
 
