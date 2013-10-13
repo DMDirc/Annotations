@@ -1,0 +1,12 @@
+<ivy-module version="2.0">
+    <info organisation="com.dmdirc" module="annotations"/>
+
+    <configurations>
+        <conf name="build" description="Everything needed to support the build process"/>
+    </configurations>
+
+    <dependencies>
+        <dependency org="com.github.shanemcc" name="jgit-describe" rev="0.3" conf="build->default" />
+        <dependency org="javax.inject" name="javax.inject" rev="1" conf="build->default" />
+    </dependencies>
+</ivy-module>
