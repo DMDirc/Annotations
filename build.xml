@@ -18,8 +18,5 @@
     <target name="-post-jar">
         <delete file="${manifest.file}"/>
     </target>
-    <target name="-post-test-run">
-        <delete file="${manifest.file}"/>
-    </target>
 
 </project>

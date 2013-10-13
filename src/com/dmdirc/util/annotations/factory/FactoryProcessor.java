@@ -121,9 +121,7 @@ public class FactoryProcessor extends AbstractProcessor {
         for (Parameter param : parameters) {
             writer.writeMethodParameter(
                     param.getAnnotations(),
-                    annotation != null && annotation.providers() ?
-                            maybeWrapProvider(annotation, param.getType()) :
-                            param.getType(),
+                    maybeWrapProvider(annotation, param),
                     param.getName(),
                     Modifier.FINAL);
         }
@@ -179,7 +177,7 @@ public class FactoryProcessor extends AbstractProcessor {
             // All the fields we need
             for (Parameter boundParam : boundParameters) {
                 writer.writeField(
-                        maybeWrapProvider(annotation, boundParam.getType()),
+                        maybeWrapProvider(annotation, boundParam),
                         boundParam.getName(),
                         Modifier.PRIVATE, Modifier.FINAL);
             }
@@ -207,7 +205,8 @@ public class FactoryProcessor extends AbstractProcessor {
                 for (int i = 0; i < parameters.length; i++) {
                     if (annotation.providers()
                             && !params.get(i).getType().startsWith("javax.inject.Provider")
-                            && boundParameters.contains(params.get(i))) {
+                            && boundParameters.contains(params.get(i))
+                            && params.get(i).getAnnotations().isEmpty()) {
                         parameters[i] = params.get(i).getName() + ".get()";
                     } else {
                         parameters[i] = params.get(i).getName();
@@ -233,17 +232,20 @@ public class FactoryProcessor extends AbstractProcessor {
 
     /**
      * Writes the given type in a Provider&lt;&gt;, if the factory is configured to use them,
-     * and the type is not already a provider.
+     * if the type is not already a provider, and if the parameter has no annotations.
      *
      * @param annotation The annotation configuring the factory.
-     * @param type The type to possibly wrap.
+     * @param parameter The parameter to possibly wrap.
      * @return The possibly-wrapped type.
      */
-    private String maybeWrapProvider(final Factory annotation, final String type) {
-        if (annotation.providers() && !type.startsWith("javax.inject.Provider")) {
-            return "javax.inject.Provider<" + type + ">";
+    private String maybeWrapProvider(final Factory annotation, final Parameter parameter) {
+        if (annotation != null
+                && annotation.providers()
+                && !parameter.getType().startsWith("javax.inject.Provider")
+                && parameter.getAnnotations().isEmpty()) {
+            return "javax.inject.Provider<" + parameter.getType() + ">";
         } else {
-            return type;
+            return parameter.getType();
         }
     }
 
