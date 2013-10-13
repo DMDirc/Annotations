@@ -26,12 +26,14 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
+import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -57,21 +59,25 @@ public class FactoryProcessor extends AbstractProcessor {
             final TypeElement typeElement = (TypeElement) type;
             final PackageElement packageElement = (PackageElement) typeElement.getEnclosingElement();
 
-            final List<String> boundParameters = new ArrayList<>();
-            final List<List<String>> allParameters = new ArrayList<>();
+            final List<Parameter> boundParameters = new ArrayList<>();
+            final List<List<Parameter>> allParameters = new ArrayList<>();
 
             for (Element child : type.getEnclosedElements()) {
                 if (child.getKind() == ElementKind.CONSTRUCTOR) {
-                    final List<String> params = new ArrayList<>();
+                    final List<Parameter> params = new ArrayList<>();
 
                     ExecutableElement ctor = (ExecutableElement) child;
                     for (VariableElement element : ctor.getParameters()) {
-                        final String param = element.asType().toString() + " " + element.getSimpleName();
+                        final Parameter param = new Parameter(
+                                element.asType().toString(),
+                                element.getSimpleName().toString(),
+                                getAnnotations(element));
                         if (element.getAnnotation(Unbound.class) == null) {
                             if (!boundParameters.contains(param)) {
                                 boundParameters.add(param);
                             }
                         }
+
                         params.add(param);
                     }
 
@@ -85,7 +91,9 @@ public class FactoryProcessor extends AbstractProcessor {
 
                 if (!packageElement.getQualifiedName().contentEquals("")) {
                     // Don't write a package line for default packages
-                    bw.append("package " + packageElement.getQualifiedName() + ";");
+                    bw.append("package ")
+                            .append(packageElement.getQualifiedName())
+                            .append(';');
                     bw.newLine();
                     bw.newLine();
                 }
@@ -93,14 +101,20 @@ public class FactoryProcessor extends AbstractProcessor {
                 final String factoryName = typeElement.getSimpleName() + "Factory";
                 final String methodName = "get" + typeElement.getSimpleName();
 
-                bw.append("@javax.annotation.Generated(\"" + getClass().getCanonicalName() + "\")");
+                bw.append("@javax.annotation.Generated(\"")
+                        .append(getClass().getCanonicalName())
+                        .append("\")");
                 bw.newLine();
                 bw.append("public class " + factoryName + " {");
                 bw.newLine();
                 bw.newLine();
 
-                for (String boundParam : boundParameters) {
-                    bw.append("    private final " + boundParam + ";");
+                for (Parameter boundParam : boundParameters) {
+                    bw.append("    private final ")
+                            .append(boundParam.getType())
+                            .append(' ')
+                            .append(boundParam.getName())
+                            .append(";");
                     bw.newLine();
                     bw.newLine();
                 }
@@ -110,21 +124,29 @@ public class FactoryProcessor extends AbstractProcessor {
                     bw.newLine();
                 }
 
+                if (annotation.singleton()) {
+                    bw.append("    @javax.inject.Singleton");
+                    bw.newLine();
+                }
+
                 bw.append("    public " + factoryName + "(");
                 writeMethodParameters(bw, boundParameters);
                 bw.append(") {");
                 bw.newLine();
-                for (String boundParam : boundParameters) {
-                    final String name = boundParam.split(" ", 2)[1];
-                    bw.append("        this." + name + " = " + name + ";");
+                for (Parameter boundParam : boundParameters) {
+                    bw.append("        this.")
+                            .append(boundParam.getName())
+                            .append(" = ")
+                            .append(boundParam.getName())
+                            .append(';');
                     bw.newLine();
                 }
                 bw.append("    }");
                 bw.newLine();
                 bw.newLine();
 
-                for (List<String> params : allParameters) {
-                    final List<String> unbound = new ArrayList<>(params);
+                for (List<Parameter> params : allParameters) {
+                    final List<Parameter> unbound = new ArrayList<>(params);
                     unbound.removeAll(boundParameters);
 
                     bw.append("    public " + typeElement.getSimpleName() + " " + methodName + "(");
@@ -135,15 +157,14 @@ public class FactoryProcessor extends AbstractProcessor {
                     bw.append("        return new " + typeElement.getSimpleName() + "(");
 
                     boolean first = true;
-                    for (String param : params) {
+                    for (Parameter param : params) {
                         if (!first) {
                             bw.append(',');
                         }
                         first = false;
 
                         bw.newLine();
-                        final String name = param.split(" ", 2)[1];
-                        bw.append("                " + name);
+                        bw.append("                ").append(param.getName());
                     }
 
                     bw.append(");");
@@ -163,12 +184,12 @@ public class FactoryProcessor extends AbstractProcessor {
 
         }
 
-        return true;
+        return false;
     }
 
-    private void writeMethodParameters(final BufferedWriter bw, final List<String> parameters) throws IOException {
+    private void writeMethodParameters(final BufferedWriter bw, final List<Parameter> parameters) throws IOException {
         boolean first = true;
-        for (String boundParam : parameters) {
+        for (Parameter boundParam : parameters) {
             if (!first) {
                 bw.append(',');
             }
@@ -176,6 +197,75 @@ public class FactoryProcessor extends AbstractProcessor {
 
             bw.newLine();
             bw.append("            final " + boundParam);
+        }
+    }
+
+    private String getAnnotations(final Element element) {
+        final StringBuilder builder = new StringBuilder();
+
+        for (AnnotationMirror mirror : element.getAnnotationMirrors()) {
+            if (mirror.getAnnotationType().toString().startsWith("com.dmdirc.util.annotations")) {
+                continue;
+            }
+
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+
+            builder.append(mirror);
+        }
+
+        return builder.toString();
+    }
+
+    private static class Parameter {
+        private final String type;
+        private final String name;
+        private final String annotations;
+
+        public Parameter(String type, String name, String annotations) {
+            this.type = type;
+            this.name = name;
+            this.annotations = annotations;
+        }
+
+        public Parameter(String type, String name) {
+            this(type, name, "");
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getAnnotations() {
+            return annotations;
+        }
+
+        @Override
+        public String toString() {
+            return (annotations.isEmpty() ? "" : annotations + " ")
+                    + type + " " + name;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 3;
+            hash = 29 * hash + Objects.hashCode(this.type);
+            hash = 29 * hash + Objects.hashCode(this.name);
+            hash = 29 * hash + Objects.hashCode(this.annotations);
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == null || getClass() != obj.getClass()) {
+                return false;
+            }
+            return toString().equals(((Parameter) obj).toString());
         }
     }
 

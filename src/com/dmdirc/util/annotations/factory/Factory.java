@@ -44,4 +44,12 @@ public @interface Factory {
      * @return True to use providers; false to use actual objects.
      */
     boolean providers() default false;
+
+    /**
+     * Whether or not to specify the generated class as a singleton.
+     *
+     * @return True to add a @Singleton annotation; false otherwise.
+     */
+    boolean singleton() default false;
+
 }
