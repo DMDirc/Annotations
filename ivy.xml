@@ -2,11 +2,16 @@
     <info organisation="com.dmdirc" module="annotations"/>
 
     <configurations>
-        <conf name="build" description="Everything needed to support the build process"/>
+        <conf name="default" description="Default configuration"/>
     </configurations>
 
+    <publications>
+        <artifact type="jar" ext="jar" conf="default"/>
+        <artifact type="pom" ext="pom" conf="default"/>
+    </publications>
+
     <dependencies>
-        <dependency org="com.github.shanemcc" name="jgit-describe" rev="0.3" conf="build->default" />
-        <dependency org="javax.inject" name="javax.inject" rev="1" conf="build->default" />
+        <dependency org="com.github.shanemcc" name="jgit-describe" rev="0.3" conf="default->default" />
+        <dependency org="javax.inject" name="javax.inject" rev="1" conf="default->default" />
     </dependencies>
 </ivy-module>

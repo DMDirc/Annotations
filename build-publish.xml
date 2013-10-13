@@ -19,7 +19,7 @@
     <target name="publish-snapshot" depends="-init-ivy,-get-git-version">
         <ivy:resolve file="ivy.xml"/>
         <ivy:deliver deliverpattern="build/ivy.xml" pubrevision="${git.version}-SNAPSHOT" />
-        <ivy:makepom ivyfile="build/ivy.xml" pomfile="dist/utils.pom">
+        <ivy:makepom ivyfile="build/ivy.xml" pomfile="dist/annotations.pom">
             <mapping conf="default" scope="compile"/>
         </ivy:makepom>
         <ivy:retrieve/>
@@ -34,7 +34,7 @@
     <target name="publish-release" depends="-init-ivy,-get-git-version">
         <ivy:resolve file="ivy.xml"/>
         <ivy:deliver deliverpattern="build/ivy.xml" pubrevision="${git.version}" />
-        <ivy:makepom ivyfile="build/ivy.xml" pomfile="dist/utils.pom">
+        <ivy:makepom ivyfile="build/ivy.xml" pomfile="dist/annotations.pom">
             <mapping conf="default" scope="compile"/>
         </ivy:makepom>
         <ivy:retrieve/>
