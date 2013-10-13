@@ -26,7 +26,6 @@ import com.dmdirc.util.annotations.util.SourceFileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
@@ -85,71 +84,28 @@ public class FactoryProcessor extends AbstractProcessor {
                 }
             }
 
-            try {
-                final SourceFileWriter writer = new SourceFileWriter(
-                        processingEnv.getFiler(),
-                        typeElement.getQualifiedName() + "Factory");
-
-                final String factoryName = typeElement.getSimpleName() + "Factory";
-                final String methodName = "get" + typeElement.getSimpleName();
-
-                writer.writePackageDeclaration(packageElement.getQualifiedName().toString())
-                        .writeClassDeclaration(factoryName, getClass());
-
-                // All the fields we need
-                for (Parameter boundParam : boundParameters) {
-                    writer.writeField(boundParam.getType(), boundParam.getName(),
-                            Modifier.PRIVATE, Modifier.FINAL);
-                }
-
-                // Constructor declaration
-                writer.writeAnnotationIf("@javax.inject.Inject", annotation.inject())
-                        .writeAnnotationIf("@javax.inject.Singleton", annotation.singleton())
-                        .writeConstructorDeclarationStart(factoryName, Modifier.PUBLIC);
-                writeMethodParameters(writer, boundParameters);
-                writer.writeMethodDeclarationEnd();
-
-                // Assign the values to fields
-                for (Parameter boundParam : boundParameters) {
-                    writer.writeFieldAssignment(boundParam.getName(), boundParam.getName());
-                }
-
-                // End of constructor
-                writer.writeBlockEnd();
-
-                // Write each factory method out in turn
-                for (List<Parameter> params : allParameters) {
-                    final List<Parameter> unbound = new ArrayList<>(params);
-                    unbound.removeAll(boundParameters);
-
-                    final String[] parameters = new String[params.size()];
-                    for (int i = 0; i < parameters.length; i++) {
-                        parameters[i] = params.get(i).getName();
-                    }
-
-                    writer.writeMethodDeclarationStart(
-                            typeElement.getSimpleName().toString(), methodName, Modifier.PUBLIC);
-                    writeMethodParameters(writer, unbound);
-                    writer.writeMethodDeclarationEnd()
-                            .writeReturnStart()
-                            .writeNewInstance(typeElement.getSimpleName().toString(), parameters)
-                            .writeStatementEnd()
-                            .writeBlockEnd();
-                }
-
-                // Done!
-                writer.writeBlockEnd();
-                writer.close();
-            } catch (IOException ex) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Unable to write factory file: " + ex.getMessage(), type);
-            }
-
+            writeFactory(
+                    packageElement.getQualifiedName().toString(),
+                    typeElement.getQualifiedName() + "Factory",
+                    typeElement.getSimpleName().toString(),
+                    annotation,
+                    boundParameters,
+                    allParameters);
         }
 
         return false;
     }
 
-    private void writeMethodParameters(final SourceFileWriter writer, final List<Parameter> parameters) throws IOException {
+    /**
+     * Writes all of the given parameters as method parameters.
+     *
+     * @param writer The writer to write to.
+     * @param parameters The parameters to be written.
+     * @throws IOException If the operation failed.
+     */
+    private void writeMethodParameters(
+            final SourceFileWriter writer,
+            final List<Parameter> parameters) throws IOException {
         for (Parameter param : parameters) {
             writer.writeMethodParameter(
                     param.getAnnotations(), param.getType(),
@@ -157,6 +113,13 @@ public class FactoryProcessor extends AbstractProcessor {
         }
     }
 
+    /**
+     * Gets all the annotations (except the ones declared by this library) of the given element
+     * as a string.
+     *
+     * @param element The element to retrieve annotations for.
+     * @return A space-separated string of all annotations and their values.
+     */
     private String getAnnotations(final Element element) {
         final StringBuilder builder = new StringBuilder();
 
@@ -175,54 +138,71 @@ public class FactoryProcessor extends AbstractProcessor {
         return builder.toString();
     }
 
-    private static class Parameter {
-        private final String type;
-        private final String name;
-        private final String annotations;
+    /**
+     * Writes out a factory class as a source file.
+     *
+     * @param packageName The package to put the factory in.
+     * @param qualifiedName The fully-qualified name of the factory.
+     * @param typeName The simple name of the factory.
+     * @param annotation The annotation configuring the factory.
+     * @param boundParameters The parameters bound by the factory (required by the constructor).
+     * @param allParameters A list of parameters taken by each constructor.
+     */
+    private void writeFactory(final String packageName, final String qualifiedName,
+            final String typeName, final Factory annotation, final List<Parameter> boundParameters,
+            final List<List<Parameter>> allParameters) {
+        try (SourceFileWriter writer = new SourceFileWriter(processingEnv.getFiler(), qualifiedName)) {
+            final String factoryName = typeName + "Factory";
+            final String methodName = "get" + typeName;
 
-        public Parameter(String type, String name, String annotations) {
-            this.type = type;
-            this.name = name;
-            this.annotations = annotations;
-        }
+            writer.writePackageDeclaration(packageName)
+                    .writeClassDeclaration(factoryName, getClass());
 
-        public Parameter(String type, String name) {
-            this(type, name, "");
-        }
-
-        public String getType() {
-            return type;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public String getAnnotations() {
-            return annotations;
-        }
-
-        @Override
-        public String toString() {
-            return (annotations.isEmpty() ? "" : annotations + " ")
-                    + type + " " + name;
-        }
-
-        @Override
-        public int hashCode() {
-            int hash = 3;
-            hash = 29 * hash + Objects.hashCode(this.type);
-            hash = 29 * hash + Objects.hashCode(this.name);
-            hash = 29 * hash + Objects.hashCode(this.annotations);
-            return hash;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == null || getClass() != obj.getClass()) {
-                return false;
+            // All the fields we need
+            for (Parameter boundParam : boundParameters) {
+                writer.writeField(boundParam.getType(), boundParam.getName(),
+                        Modifier.PRIVATE, Modifier.FINAL);
             }
-            return toString().equals(((Parameter) obj).toString());
+
+            // Constructor declaration
+            writer.writeAnnotationIf("@javax.inject.Inject", annotation.inject())
+                    .writeAnnotationIf("@javax.inject.Singleton", annotation.singleton())
+                    .writeConstructorDeclarationStart(factoryName, Modifier.PUBLIC);
+            writeMethodParameters(writer, boundParameters);
+            writer.writeMethodDeclarationEnd();
+
+            // Assign the values to fields
+            for (Parameter boundParam : boundParameters) {
+                writer.writeFieldAssignment(boundParam.getName(), boundParam.getName());
+            }
+
+            // End of constructor
+            writer.writeBlockEnd();
+
+            // Write each factory method out in turn
+            for (List<Parameter> params : allParameters) {
+                final List<Parameter> unbound = new ArrayList<>(params);
+                unbound.removeAll(boundParameters);
+
+                final String[] parameters = new String[params.size()];
+                for (int i = 0; i < parameters.length; i++) {
+                    parameters[i] = params.get(i).getName();
+                }
+
+                writer.writeMethodDeclarationStart(typeName, methodName, Modifier.PUBLIC);
+                writeMethodParameters(writer, unbound);
+                writer.writeMethodDeclarationEnd()
+                        .writeReturnStart()
+                        .writeNewInstance(typeName, parameters)
+                        .writeStatementEnd()
+                        .writeBlockEnd();
+            }
+
+            // Done!
+            writer.writeBlockEnd();
+        } catch (IOException ex) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "Unable to write factory file: " + ex.getMessage());
         }
     }
 
