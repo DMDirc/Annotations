@@ -55,16 +55,12 @@ public class FactoryProcessor extends AbstractProcessor {
     /** {@inheritDoc} */
     @Override
     public boolean process(final Set<? extends TypeElement> set, final RoundEnvironment roundEnv) {
-        boolean own = false;
-
         for (Element type : roundEnv.getElementsAnnotatedWith(Factory.class)) {
             Factory annotation = type.getAnnotation(Factory.class);
 
             if (annotation == null) {
                 continue;
             }
-
-            own = true;
 
             final TypeElement typeElement = (TypeElement) type;
             final PackageElement packageElement = (PackageElement) typeElement.getEnclosingElement();
@@ -107,7 +103,7 @@ public class FactoryProcessor extends AbstractProcessor {
                     type);
         }
 
-        return own;
+        return false;
     }
 
     /**
