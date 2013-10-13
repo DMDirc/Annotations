@@ -11,11 +11,12 @@
 
         <available classname="org.apache.ivy.ant.IvyConfigure"
               property="ivy.available" classpathref="ivy.classpath" />
+
+        <taskdef resource="org/apache/ivy/ant/antlib.xml" uri="antlib:org.apache.ivy.ant" classpathref="ivy.classpath"/>
+        <ivy:settings file="etc/ivy/ivysettings.xml"/>
     </target>
 
     <target name="-init-dependencies" depends="-init-ivy" unless="ivy.done">
-        <taskdef resource="org/apache/ivy/ant/antlib.xml" uri="antlib:org.apache.ivy.ant" classpathref="ivy.classpath"/>
-        <ivy:settings file="etc/ivy/ivysettings.xml"/>
         <ivy:retrieve symlink="true" pattern="lib/[artifact].[ext]" sync="true" />
         <property name="ivy.done" value="true"/>
     </target>

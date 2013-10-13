@@ -8,6 +8,7 @@
     <import file="nbproject/build-impl.xml"/>
     <import file="build-ivy.xml"/>
     <import file="build-versioning.xml"/>
+    <import file="build-publish.xml"/>
 
     <target name="-init-lib-directory">
       <mkdir dir="lib"/>
