@@ -121,7 +121,7 @@ public class FactoryProcessor extends AbstractProcessor {
         for (Parameter param : parameters) {
             writer.writeMethodParameter(
                     param.getAnnotations(),
-                    annotation != null && annotation.providers() ?
+                    annotation != null && annotation.providers() && param.getAnnotations().isEmpty() ?
                             maybeWrapProvider(annotation, param.getType()) :
                             param.getType(),
                     param.getName(),
@@ -179,7 +179,7 @@ public class FactoryProcessor extends AbstractProcessor {
             // All the fields we need
             for (Parameter boundParam : boundParameters) {
                 writer.writeField(
-                        maybeWrapProvider(annotation, boundParam.getType()),
+                        maybeWrapProvider(boundParam.getAnnotations().isEmpty() ? annotation : null, boundParam.getType()),
                         boundParam.getName(),
                         Modifier.PRIVATE, Modifier.FINAL);
             }
@@ -207,7 +207,8 @@ public class FactoryProcessor extends AbstractProcessor {
                 for (int i = 0; i < parameters.length; i++) {
                     if (annotation.providers()
                             && !params.get(i).getType().startsWith("javax.inject.Provider")
-                            && boundParameters.contains(params.get(i))) {
+                            && boundParameters.contains(params.get(i))
+                            && params.get(i).getAnnotations().isEmpty()) {
                         parameters[i] = params.get(i).getName() + ".get()";
                     } else {
                         parameters[i] = params.get(i).getName();
