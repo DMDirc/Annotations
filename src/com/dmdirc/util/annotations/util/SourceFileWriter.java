@@ -26,6 +26,7 @@ import java.io.BufferedWriter;
 import java.io.Closeable;
 import java.io.IOException;
 import javax.annotation.processing.Filer;
+import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.tools.JavaFileObject;
 
@@ -54,10 +55,12 @@ public class SourceFileWriter implements Closeable {
      *
      * @param filer The filer to use to create the source file.
      * @param fileName The name of the file to create.
+     * @param elements The element(s) responsible for this file being written.
      * @throws IOException If the file couldn't be created.
      */
-    public SourceFileWriter(final Filer filer, final String fileName) throws IOException {
-        final JavaFileObject fileObject = filer.createSourceFile(fileName);
+    public SourceFileWriter(final Filer filer, final String fileName,
+            final Element... elements) throws IOException {
+        final JavaFileObject fileObject = filer.createSourceFile(fileName, elements);
         writer = new BufferedWriter(fileObject.openWriter());
     }
 
@@ -85,19 +88,22 @@ public class SourceFileWriter implements Closeable {
      *
      * @param className The name of the class to write.
      * @param generator The class generating the source.
+     * @param modifiers The modifiers of the class, if any.
      * @return A reference to this writer, for convenience.
      * @throws IOException If the operation failed.
      */
     public SourceFileWriter writeClassDeclaration(
             final String className,
-            final Class<?> generator) throws IOException {
+            final Class<?> generator,
+            final Modifier... modifiers) throws IOException {
         writeIndent()
                 .append("@javax.annotation.Generated(\"")
                 .append(generator.getCanonicalName())
                 .append("\")")
                 .append(CRLF);
-        writeIndent()
-                .append("public class ")
+        writeIndent();
+        writeModifiers(modifiers)
+                .append("class ")
                 .append(className)
                 .append(" {")
                 .append(CRLF)

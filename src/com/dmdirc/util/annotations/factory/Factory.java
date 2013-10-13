@@ -24,6 +24,7 @@ package com.dmdirc.util.annotations.factory;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Target;
+import javax.lang.model.element.Modifier;
 
 /**
  * Denotes that a factory should be generated for the annotated type.
@@ -51,5 +52,26 @@ public @interface Factory {
      * @return True to add a @Singleton annotation; false otherwise.
      */
     boolean singleton() default false;
+
+    /**
+     * Custom name for the factory. If not specified the class name + 'Factory' will be used.
+     *
+     * @return The name to use for the factory.
+     */
+    String name() default "";
+
+    /**
+     * The modifiers to apply to the factory.
+     *
+     * @return The modifiers to apply to the factory.
+     */
+    Modifier[] modifiers() default {Modifier.PUBLIC};
+
+    /**
+     * The modifiers to apply to generated methods.
+     *
+     * @return The modifiers to apply to generated methods.
+     */
+    Modifier[] methodModifiers() default {Modifier.PUBLIC};
 
 }

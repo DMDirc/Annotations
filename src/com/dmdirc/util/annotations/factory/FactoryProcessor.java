@@ -45,19 +45,26 @@ import javax.tools.Diagnostic;
 /**
  * Processor for the {@link Factory} annotation.
  */
-@SupportedAnnotationTypes("com.dmdirc.util.annotations.factory.Factory")
+@SupportedAnnotationTypes({
+    "com.dmdirc.util.annotations.factory.Factory",
+    "com.dmdirc.util.annotations.factory.Unbound",
+})
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 public class FactoryProcessor extends AbstractProcessor {
 
     /** {@inheritDoc} */
     @Override
     public boolean process(final Set<? extends TypeElement> set, final RoundEnvironment roundEnv) {
+        boolean own = false;
+
         for (Element type : roundEnv.getElementsAnnotatedWith(Factory.class)) {
             Factory annotation = type.getAnnotation(Factory.class);
 
             if (annotation == null) {
                 continue;
             }
+
+            own = true;
 
             final TypeElement typeElement = (TypeElement) type;
             final PackageElement packageElement = (PackageElement) typeElement.getEnclosingElement();
@@ -90,14 +97,17 @@ public class FactoryProcessor extends AbstractProcessor {
 
             writeFactory(
                     packageElement.getQualifiedName().toString(),
-                    typeElement.getQualifiedName() + "Factory",
+                    annotation.name().isEmpty() ?
+                            typeElement.getSimpleName() + "Factory" :
+                            annotation.name(),
                     typeElement.getSimpleName().toString(),
                     annotation,
                     boundParameters,
-                    allParameters);
+                    allParameters,
+                    type);
         }
 
-        return false;
+        return own;
     }
 
     /**
@@ -152,22 +162,23 @@ public class FactoryProcessor extends AbstractProcessor {
      * Writes out a factory class as a source file.
      *
      * @param packageName The package to put the factory in.
-     * @param qualifiedName The fully-qualified name of the factory.
-     * @param typeName The simple name of the factory.
+     * @param factoryName The simple name of the factory.
+     * @param typeName The simple name of the class being built.
      * @param annotation The annotation configuring the factory.
      * @param boundParameters The parameters bound by the factory (required by the constructor).
      * @param allParameters A list of parameters taken by each constructor.
+     * @param elements The element(s) responsible for the file being written.
      */
-    private void writeFactory(final String packageName, final String qualifiedName,
+    private void writeFactory(final String packageName, final String factoryName,
             final String typeName, final Factory annotation, final List<Parameter> boundParameters,
-            final List<List<Parameter>> allParameters) {
-        try (SourceFileWriter writer = new SourceFileWriter(processingEnv.getFiler(), qualifiedName)) {
-            final String factoryName = typeName + "Factory";
+            final List<List<Parameter>> allParameters, final Element... elements) {
+        try (SourceFileWriter writer = new SourceFileWriter(processingEnv.getFiler(),
+                packageName + (packageName.isEmpty() ? "" : ".") + factoryName, elements)) {
             final String methodName = "get" + typeName;
 
             writer.writePackageDeclaration(packageName)
                     .writeAnnotationIf("@javax.inject.Singleton", annotation.singleton())
-                    .writeClassDeclaration(factoryName, getClass());
+                    .writeClassDeclaration(factoryName, getClass(), annotation.modifiers());
 
             // All the fields we need
             for (Parameter boundParam : boundParameters) {
@@ -207,7 +218,7 @@ public class FactoryProcessor extends AbstractProcessor {
                     }
                 }
 
-                writer.writeMethodDeclarationStart(typeName, methodName, Modifier.PUBLIC);
+                writer.writeMethodDeclarationStart(typeName, methodName, annotation.methodModifiers());
                 writeMethodParameters(null, writer, unbound);
                 writer.writeMethodDeclarationEnd()
                         .writeReturnStart()
