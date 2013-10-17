@@ -254,12 +254,24 @@ public class SourceFileWriter implements Closeable {
     /**
      * Writes the end of a method declaration.
      *
+     * @param throwTypes The types thrown by the method, if any.
      * @return A reference to this writer, for convenience.
      * @throws IOException If the operation failed.
      */
-    public SourceFileWriter writeMethodDeclarationEnd() throws IOException {
-        // TODO: Support throws declarations here.
-        write(") {")
+    public SourceFileWriter writeMethodDeclarationEnd(final String... throwTypes) throws IOException {
+        write(")");
+
+        if (throwTypes.length > 0) {
+            write(" throws").write(CRLF);
+            for (int i = 0; i < throwTypes.length; i++) {
+                if (i > 0) {
+                    write(",").write(CRLF);
+                }
+                writeIndent().write(throwTypes[i]);
+            }
+        }
+
+        write(" {")
                 .write(CRLF);
         indent--;
         return this;

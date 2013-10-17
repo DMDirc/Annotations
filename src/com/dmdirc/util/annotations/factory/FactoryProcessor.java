@@ -40,6 +40,7 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.TypeMirror;
 import javax.tools.Diagnostic;
 
 /**
@@ -66,7 +67,7 @@ public class FactoryProcessor extends AbstractProcessor {
             final PackageElement packageElement = (PackageElement) typeElement.getEnclosingElement();
 
             final List<Parameter> boundParameters = new ArrayList<>();
-            final List<List<Parameter>> allParameters = new ArrayList<>();
+            final List<Constructor> constructors = new ArrayList<>();
 
             for (Element child : type.getEnclosedElements()) {
                 if (child.getKind() == ElementKind.CONSTRUCTOR) {
@@ -87,7 +88,7 @@ public class FactoryProcessor extends AbstractProcessor {
                         params.add(param);
                     }
 
-                    allParameters.add(params);
+                    constructors.add(new Constructor(params, getTypeNames(ctor.getThrownTypes())));
                 }
             }
 
@@ -99,7 +100,7 @@ public class FactoryProcessor extends AbstractProcessor {
                     typeElement.getSimpleName().toString(),
                     annotation,
                     boundParameters,
-                    allParameters,
+                    constructors,
                     type);
         }
 
@@ -160,12 +161,12 @@ public class FactoryProcessor extends AbstractProcessor {
      * @param typeName The simple name of the class being built.
      * @param annotation The annotation configuring the factory.
      * @param boundParameters The parameters bound by the factory (required by the constructor).
-     * @param allParameters A list of parameters taken by each constructor.
+     * @param constructors A list of constructors.
      * @param elements The element(s) responsible for the file being written.
      */
     private void writeFactory(final String packageName, final String factoryName,
             final String typeName, final Factory annotation, final List<Parameter> boundParameters,
-            final List<List<Parameter>> allParameters, final Element... elements) {
+            final List<Constructor> constructors, final Element... elements) {
         try (SourceFileWriter writer = new SourceFileWriter(processingEnv.getFiler(),
                 packageName + (packageName.isEmpty() ? "" : ".") + factoryName, elements)) {
             final String methodName = "get" + typeName;
@@ -197,7 +198,8 @@ public class FactoryProcessor extends AbstractProcessor {
             writer.writeBlockEnd();
 
             // Write each factory method out in turn
-            for (List<Parameter> params : allParameters) {
+            for (Constructor constructor : constructors) {
+                final List<Parameter> params = constructor.getParameters();
                 final List<Parameter> unbound = new ArrayList<>(params);
                 unbound.removeAll(boundParameters);
 
@@ -213,9 +215,12 @@ public class FactoryProcessor extends AbstractProcessor {
                     }
                 }
 
+                final String[] throwsArray = constructor.getThrownTypes()
+                        .toArray(new String[constructor.getThrownTypes().size()]);
+
                 writer.writeMethodDeclarationStart(typeName, methodName, annotation.methodModifiers());
                 writeMethodParameters(null, writer, unbound);
-                writer.writeMethodDeclarationEnd()
+                writer.writeMethodDeclarationEnd(throwsArray)
                         .writeReturnStart()
                         .writeNewInstance(typeName, parameters)
                         .writeStatementEnd()
@@ -247,6 +252,22 @@ public class FactoryProcessor extends AbstractProcessor {
         } else {
             return parameter.getType();
         }
+    }
+
+    /**
+     * Gets a list of fully-qualified type names corresponding to the given mirrors.
+     *
+     * @param types The set of types to convert to qualified names.
+     * @return A matching list containing the qualified name of each type.
+     */
+    private List<String> getTypeNames(final List<? extends TypeMirror> types) {
+        final List<String> res = new ArrayList<>(types.size());
+
+        for (TypeMirror type : types) {
+            res.add(type.toString());
+        }
+
+        return res;
     }
 
 }
