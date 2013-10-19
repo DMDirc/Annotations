@@ -20,38 +20,52 @@
  * SOFTWARE.
  */
 
-package com.dmdirc.util.annotations.factory;
+package com.dmdirc.util.annotations;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 
 /**
- * Represents a constructor.
+ * Represents a method parameters.
  */
-public class Constructor {
+public class Parameter {
 
-    private final List<Parameter> parameters;
-    private final List<String> thrownTypes;
+    private final String type;
+    private final String name;
+    private final String annotations;
 
-    public Constructor(List<Parameter> parameters, List<String> thrownTypes) {
-        this.parameters = parameters;
-        this.thrownTypes = thrownTypes;
+    public Parameter(String type, String name, String annotations) {
+        this.type = type;
+        this.name = name;
+        this.annotations = annotations;
     }
 
-    public List<Parameter> getParameters() {
-        return Collections.unmodifiableList(parameters);
+    public Parameter(String type, String name) {
+        this(type, name, "");
     }
 
-    public List<String> getThrownTypes() {
-        return Collections.unmodifiableList(thrownTypes);
+    public String getType() {
+        return type;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getAnnotations() {
+        return annotations;
+    }
+
+    @Override
+    public String toString() {
+        return (annotations.isEmpty() ? "" : annotations + " ") + type + " " + name;
     }
 
     @Override
     public int hashCode() {
         int hash = 3;
-        hash = 29 * hash + Objects.hashCode(this.parameters);
-        hash = 29 * hash + Objects.hashCode(this.thrownTypes);
+        hash = 29 * hash + Objects.hashCode(this.type);
+        hash = 29 * hash + Objects.hashCode(this.name);
+        hash = 29 * hash + Objects.hashCode(this.annotations);
         return hash;
     }
 
@@ -60,8 +74,7 @@ public class Constructor {
         if (obj == null || getClass() != obj.getClass()) {
             return false;
         }
-        return getParameters().equals(((Constructor) obj).getParameters())
-                && getThrownTypes().equals(((Constructor) obj).getThrownTypes());
+        return toString().equals(obj.toString());
     }
 
 }

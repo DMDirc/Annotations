@@ -22,6 +22,8 @@
 
 package com.dmdirc.util.annotations.factory;
 
+import com.dmdirc.util.annotations.Constructor;
+import com.dmdirc.util.annotations.Parameter;
 import com.dmdirc.util.annotations.util.SourceFileWriter;
 import java.io.IOException;
 import java.util.ArrayList;

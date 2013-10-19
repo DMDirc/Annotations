@@ -35,19 +35,29 @@ import javax.tools.JavaFileObject;
  */
 public class SourceFileWriter implements Closeable {
 
-    /** Constant for inserting a carriage return and line feed. */
+    /**
+     * Constant for inserting a carriage return and line feed.
+     */
     private static final String CRLF = "\r\n";
 
-    /** Number of columns to indent by. */
+    /**
+     * Number of columns to indent by.
+     */
     private static final int INDENT_WIDTH = 4;
 
-    /** The writer to actually write to. */
+    /**
+     * The writer to actually write to.
+     */
     private final BufferedWriter writer;
 
-    /** The indentation level to write at. */
+    /**
+     * The indentation level to write at.
+     */
     private int indent;
 
-    /** Whether we've writing the first parameter to a method or not. */
+    /**
+     * Whether we've writing the first parameter to a method or not.
+     */
     private boolean firstParameter;
 
     /**
@@ -67,7 +77,8 @@ public class SourceFileWriter implements Closeable {
     /**
      * Writes a package declaration to the file.
      *
-     * @param packageName The name of the package. If empty, no declaration will be written.
+     * @param packageName The name of the package. If empty, no declaration will
+     * be written.
      * @return A reference to this writer, for convenience.
      * @throws IOException If the operation failed.
      */
@@ -96,6 +107,60 @@ public class SourceFileWriter implements Closeable {
             final String className,
             final Class<?> generator,
             final Modifier... modifiers) throws IOException {
+        writeClassDeclarationStart(className, generator, modifiers);
+        writeClassDeclarationEnd();
+        return this;
+    }
+
+    /**
+     * Writes an extends declaration to a constructor.
+     *
+     * @param name The name of the class being extended
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeClassExtendsDeclaration(
+            final String name) throws IOException {
+        writer.append(" extends ")
+                .append(name);
+        return this;
+    }
+
+    /**
+     * Writes an implements declaration to a constructor.
+     *
+     * @param names The name(s) of class being implemented
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeClassImplementsDeclaration(
+            final String... names) throws IOException {
+        writer.append(" implements ");
+        for (String name : names) {
+            if (!firstParameter) {
+                write(",");
+            }
+            writer.append(name);
+        }
+        return this;
+    }
+
+    /**
+     * Writes the start of a class declaration.
+     *
+     * @param className The name of the class to write.
+     * @param generator The class generating the source.
+     * @param modifiers The modifiers of the class, if any.
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeClassDeclarationStart(
+            final String className,
+            final Class<?> generator,
+            final Modifier... modifiers) throws IOException {
         writeIndent()
                 .append("@javax.annotation.Generated(\"")
                 .append(generator.getCanonicalName())
@@ -104,20 +169,33 @@ public class SourceFileWriter implements Closeable {
         writeIndent();
         writeModifiers(modifiers)
                 .append("class ")
-                .append(className)
-                .append(" {")
-                .append(CRLF)
-                .append(CRLF);
+                .append(className);
+        firstParameter = true;
         indent++;
         return this;
     }
 
     /**
-     * Writes an annotation for a class, field, or other non-nested element, if the given
-     * condition is true.
+     * Writes the end of a class declaration.
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeClassDeclarationEnd() throws IOException {
+        writer.append(" {")
+                .append(CRLF)
+                .append(CRLF);
+        firstParameter = false;
+        return this;
+    }
+
+    /**
+     * Writes an annotation for a class, field, or other non-nested element, if
+     * the given condition is true.
      *
      * @param annotation The annotation to write.
-     * @param condition If true the annotation will be written; if false no operation is performed.
+     * @param condition If true the annotation will be written; if false no
+     * operation is performed.
      * @return A reference to this writer, for convenience.
      * @throws IOException If the operation failed.
      */
@@ -173,8 +251,10 @@ public class SourceFileWriter implements Closeable {
     /**
      * Writes the start of a constructor declaration.
      *
-     * <p>This should be followed by 0 or more calls to {@link #writeMethodParameter}, and then
-     * a single call to {@link #writeMethodDeclarationEnd}.
+     * <p>
+     * This should be followed by 0 or more calls to
+     * {@link #writeMethodParameter}, and then a single call to
+     * {@link #writeMethodDeclarationEnd}.
      *
      * @param name The name of the method.
      * @param modifiers The method modifiers, if any.
@@ -196,8 +276,10 @@ public class SourceFileWriter implements Closeable {
     /**
      * Writes the start of a method declaration.
      *
-     * <p>This should be followed by 0 or more calls to {@link #writeMethodParameter}, and then
-     * a single call to {@link #writeMethodDeclarationEnd}.
+     * <p>
+     * This should be followed by 0 or more calls to
+     * {@link #writeMethodParameter}, and then a single call to
+     * {@link #writeMethodDeclarationEnd}.
      *
      * @param returnType The return type of the method.
      * @param name The name of the method.
@@ -217,6 +299,94 @@ public class SourceFileWriter implements Closeable {
                 .append("(");
         indent += 2;
         firstParameter = true;
+        return this;
+    }
+
+    /**
+     * Writes the start of a super constructor call.
+     *
+     * This should be followed by 0 or more calls to
+     * {@link #writeMethodCallParameter}, and then a single call to
+     * {@link #writeMethodCallEnd()}.
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeSuperConstructorStart() throws IOException {
+        writeIndent();
+        write("super(");
+        firstParameter = true;
+        return this;
+    }
+
+    /**
+     * Writes the start of a super method call.
+     *
+     * This should be followed by 0 or more calls to
+     * {@link #writeMethodCallParameter}, and then a single call to
+     * {@link #writeMethodCallEnd()}.
+     *
+     * @param name Name of the method to call
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeSuperMethodStart(final String name) throws IOException {
+        writeIndent();
+        write("super.");
+        write(name);
+        write("(");
+        firstParameter = true;
+        return this;
+    }
+
+    /**
+     * Writes the start of a super method call.
+     *
+     * This should be followed by 0 or more calls to
+     * {@link #writeMethodCallParameter}, and then a single call to
+     * {@link #writeMethodCallEnd()}.
+     *
+     * @param name Name of the method to call
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeMethodCallStart(final String name) throws IOException {
+        writeIndent();
+        write(name);
+        write("(");
+        firstParameter = true;
+        return this;
+    }
+
+    /**
+     * Writes a method call parameter.
+     *
+     * @param name The name of the parameter.
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeMethodCallParameter(final String name) throws IOException {
+        if (!firstParameter) {
+            write(",");
+        }
+        firstParameter = false;
+
+        write(name);
+        return this;
+    }
+
+    /**
+     * Writes the end of a method call declaration
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeMethodCallEnd() throws IOException {
+        write(");");
+        write(CRLF);
         return this;
     }
 
@@ -340,7 +510,8 @@ public class SourceFileWriter implements Closeable {
     /**
      * Writes a new instance invocation.
      *
-     * @param name The fully-qualified name of the type to create a new instance of.
+     * @param name The fully-qualified name of the type to create a new instance
+     * of.
      * @param parameters The value of any parameters to pass in.
      * @return A reference to this writer, for convenience.
      * @throws IOException If the operation failed.
