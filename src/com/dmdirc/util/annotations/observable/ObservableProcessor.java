@@ -26,6 +26,7 @@ import com.dmdirc.util.annotations.Constructor;
 import com.dmdirc.util.annotations.Method;
 import com.dmdirc.util.annotations.Parameter;
 import com.dmdirc.util.annotations.util.SourceFileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -98,94 +99,161 @@ public class ObservableProcessor extends AbstractProcessor {
                         constructors.add(new Constructor(params, getTypeNames(ctor.getThrownTypes())));
                     }
                 }
-                writeObserveableModel(packageName, observableClassName, className, constructors, methods, type);
+                writeObserveableModel(annotation, packageName, observableClassName, className, constructors, methods, type);
             }
         }
         return false;
     }
 
-    private void writeObserveableModel(final String packageName,
-            final String className, final String parentClassName,
-            final List<Constructor> constructors, final List<Method> methods,
-            final Element... elements) {
+    private void writeObserveableModel(final ObservableModel annotation,
+            final String packageName, final String className,
+            final String parentClassName, final List<Constructor> constructors,
+            final List<Method> methods, final Element... elements) {
         try (SourceFileWriter writer = new SourceFileWriter(processingEnv.getFiler(),
                 packageName + (packageName.isEmpty() ? "" : ".") + className, elements)) {
-            //Write package
             writer.writePackageDeclaration(packageName);
-            //Write class declaration
             writer.writeClassDeclarationStart(className, getClass());
             writer.writeClassExtendsDeclaration(parentClassName);
             writer.writeClassDeclarationEnd();
-            //Constructors
-            for (Constructor constructor : constructors) {
-                writer.writeConstructorDeclarationStart(className);
-                for (Parameter param : constructor.getParameters()) {
-                    writer.writeMethodParameter(param.getAnnotations(), param.getType(), param.getName(), Modifier.FINAL);
-                }
-                writer.writeMethodDeclarationEnd();
-                writer.writeSuperConstructorStart();
-                for (Parameter param : constructor.getParameters()) {
-                    writer.writeMethodCallParameter(param.getName());
-                }
-                writer.writeMethodCallEnd();
-                for (Method method : methods) {
-                    writer.writeFieldAssignment(method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Listeners",
-                            "new java.util.ArrayList<>()");
-                }
-                writer.writeBlockEnd();
-            }
-            //Wrapped setters
+            writeListenerFields(writer, methods);
+            writeConstructors(writer, constructors, methods, className);
+            writeWrappedSetters(writer, methods, annotation.oldValue());
             for (Method method : methods) {
-                writer.writeField("java.util.List<" + method.getName().substring(3) + "Listener>",
-                        method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Listeners",
-                        Modifier.PRIVATE, Modifier.FINAL);
-                writer.writeMethodDeclarationStart(method.getReturnType(), method.getName(), method.getModifiers().toArray(new Modifier[]{}));
-                for (Parameter param : method.getParameters()) {
-                    writer.writeMethodParameter(param.getAnnotations(), param.getType(), param.getName(), Modifier.FINAL);
-                }
-                writer.writeMethodDeclarationEnd();
-                writer.write("final " + method.getParameters().get(0).getType() + " oldValue = get" + method.getName().substring(3) + "();");
-                writer.write("\r\n");
-                writer.writeSuperMethodStart(method.getName());
-                for (Parameter param : method.getParameters()) {
-                    writer.writeMethodCallParameter(param.getName());
-                }
-                writer.writeMethodCallEnd();
-                writer.write("final " + method.getParameters().get(0).getType() + " newValue = get" + method.getName().substring(3) + "();");
-                writer.write("\r\n");
-                writer.write("fire" + method.getName().substring(3) + "Listener(oldValue, newValue);");
-                writer.write("\r\n");
-                writer.writeBlockEnd();
-                writer.write("public void add" + method.getName().substring(3) + "Listener(");
-                writer.write(method.getName().substring(3) + "Listener listener) {");
-                writer.write(method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Listeners.add(listener);");
-                writer.write("}\r\n");
-                writer.write("public void remove" + method.getName().substring(3) + "Listener(");
-                writer.write(method.getName().substring(3) + "Listener listener) {");
-                writer.write(method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Listeners.remove(listener);");
-                writer.write("}\r\n");
-                writer.write("public void fire" + method.getName().substring(3) + "Listener(");
-                writer.write(method.getParameters().get(0).getType() + " oldValue, ");
-                writer.write(method.getParameters().get(0).getType() + " newValue) { ");
-                writer.write("for (" + method.getName().substring(3) + "Listener listener : ");
-                writer.write(method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Listeners) {");
-                writer.write("\r\n");
-                writer.write("listener.");
-                writer.write(method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Changed(oldValue, newValue);");
-                writer.write("\r\n");
-                writer.write("}");
-                writer.write("}\r\n");
-                writer.write("public interface " + method.getName().substring(3) + "Listener { ");
-                writer.write("void " + method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Changed(");
-                writer.write(method.getParameters().get(0).getType() + " oldValue, ");
-                writer.write(method.getParameters().get(0).getType() + " newValue); ");
-                writer.write("}\r\n");
+                writeListenerManagement(writer, method);
+                writeFireListenerMethod(writer, method, annotation.oldValue());
             }
-            //End class
+            writeInterfaces(writer, methods, annotation.oldValue());
             writer.writeBlockEnd();
         } catch (Exception ex) {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Unable to write observablemodel file: " + ex.getMessage());
         }
+    }
+
+    private void writeListenerFields(final SourceFileWriter writer,
+            final List<Method> methods) throws IOException {
+        for (Method method : methods) {
+            writer.writeField("java.util.List<" + method.getName().substring(3) + "Listener>",
+                    method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Listeners",
+                    Modifier.PRIVATE, Modifier.FINAL);
+        }
+    }
+
+    private void writeConstructors(final SourceFileWriter writer,
+            final List<Constructor> constructors, final List<Method> methods,
+            final String className) throws IOException {
+        for (Constructor constructor : constructors) {
+            writer.writeConstructorDeclarationStart(className);
+            for (Parameter param : constructor.getParameters()) {
+                writer.writeMethodParameter(param.getAnnotations(), param.getType(), param.getName(), Modifier.FINAL);
+            }
+            writer.writeMethodDeclarationEnd();
+            writer.writeSuperConstructorStart();
+            for (Parameter param : constructor.getParameters()) {
+                writer.writeMethodCallParameter(param.getName());
+            }
+            writer.writeMethodCallEnd();
+            for (Method method : methods) {
+                writer.writeFieldAssignment(method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Listeners",
+                        "new java.util.ArrayList<>()");
+            }
+            writer.writeBlockEnd();
+        }
+    }
+
+    private void writeWrappedSetters(final SourceFileWriter writer,
+            final List<Method> methods, final boolean oldValue) throws IOException {
+        for (Method method : methods) {
+            writer.writeMethodDeclarationStart(method.getReturnType(), method.getName(), method.getModifiers().toArray(new Modifier[]{}));
+            for (Parameter param : method.getParameters()) {
+                writer.writeMethodParameter(param.getAnnotations(), param.getType(), param.getName(), Modifier.FINAL);
+            }
+            writer.writeMethodDeclarationEnd();
+            if (oldValue) {
+            writer.writeDeclarationAndAssignment(method.getParameters().get(0).getType(),
+                    "oldValue",
+                    "get" + method.getName().substring(3) + "()",
+                        Modifier.FINAL);
+            }
+            writer.writeSuperMethodStart(method.getName());
+            for (Parameter param : method.getParameters()) {
+                writer.writeMethodCallParameter(param.getName());
+            }
+            writer.writeMethodCallEnd();
+            writer.writeDeclarationAndAssignment(method.getParameters().get(0).getType(),
+                    "newValue",
+                    "get" + method.getName().substring(3) + "()",
+                    Modifier.FINAL);
+            writer.writeMethodCallStart("fire" + method.getName().substring(3) + "Listener");
+            if (oldValue) {
+                writer.writeMethodCallParameter("oldValue");
+            }
+            writer.writeMethodCallParameter("newValue");
+            writer.writeMethodCallEnd();
+            writer.writeBlockEnd();
+        }
+    }
+
+    private void writeListenerManagement(final SourceFileWriter writer,
+            final Method method) throws IOException {
+        writeAddListenerManagementMethod(writer, method, "add", Modifier.PUBLIC);
+        writeAddListenerManagementMethod(writer, method, "remove", Modifier.PUBLIC);
+    }
+
+    private void writeAddListenerManagementMethod(final SourceFileWriter writer,
+            final Method method, final String action, Modifier modifier) throws IOException {
+        writer.writeMethodDeclarationStart("void", action + method.getName().substring(3) + "Listener", modifier);
+        writer.writeMethodParameter("",
+                method.getName().substring(3) + "Listener",
+                "listener", Modifier.FINAL);
+        writer.writeMethodDeclarationEnd();
+        writer.writeMethodCallStart(method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Listeners." + action);
+        writer.writeMethodCallParameter("listener");
+        writer.writeMethodCallEnd();
+        writer.writeBlockEnd();
+    }
+
+    private void writeFireListenerMethod(final SourceFileWriter writer, final Method method, final boolean oldValue) throws IOException {
+        writer.writeMethodDeclarationStart("void", "fire" + method.getName().substring(3) + "Listener", Modifier.PRIVATE);
+        if (oldValue) {
+            writer.writeMethodParameter("",
+                    method.getParameters().get(0).getType(),
+                    "oldValue", Modifier.FINAL);
+        }
+        writer.writeMethodParameter("",
+                method.getParameters().get(0).getType(),
+                "newValue", Modifier.FINAL);
+        writer.writeMethodDeclarationEnd();
+        writer.writeNewForLoopStart(method.getName().substring(3) + "Listener",
+                "listener",
+                method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Listeners",
+                "");
+        writer.writeMethodCallStart("listener." + method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Changed");
+        if (oldValue) {
+            writer.writeMethodCallParameter("oldValue");
+        }
+        writer.writeMethodCallParameter("newValue");
+        writer.writeMethodCallEnd();
+        writer.writeForLoopEnd();
+        writer.writeBlockEnd();
+    }
+
+    private void writeInterfaces(final SourceFileWriter writer,
+            final List<Method> methods, final boolean oldValue) throws IOException {
+        for (Method method : methods) {
+            writeInterface(writer, method, oldValue);
+        }
+    }
+
+    private void writeInterface(final SourceFileWriter writer,
+            final Method method, final boolean oldValue) throws IOException {
+        writer.writeInterfaceDeclaration(method.getName().substring(3) + "Listener", getClass(), Modifier.PUBLIC);
+        writer.writeMethodDeclarationStart("void", method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) + "Changed");
+        if (oldValue) {
+            writer.writeMethodParameter("", method.getParameters().get(0).getType(), "oldValue");
+        }
+        writer.writeMethodParameter("", method.getParameters().get(0).getType(), "newValue");
+        writer.writeInterfaceMethodDeclarationEnd();
+        writer.writeInterfaceBlockEnd();
     }
 
     /**

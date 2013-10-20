@@ -113,6 +113,24 @@ public class SourceFileWriter implements Closeable {
     }
 
     /**
+     * Writes an interface declaration to the file.
+     *
+     * @param className The name of the class to write.
+     * @param generator The class generating the source.
+     * @param modifiers The modifiers of the class, if any.
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeInterfaceDeclaration(
+            final String className,
+            final Class<?> generator,
+            final Modifier... modifiers) throws IOException {
+        writeInterfaceDeclarationStart(className, generator, modifiers);
+        writeClassDeclarationEnd();
+        return this;
+    }
+
+    /**
      * Writes an extends declaration to a constructor.
      *
      * @param name The name of the class being extended
@@ -169,6 +187,34 @@ public class SourceFileWriter implements Closeable {
         writeIndent();
         writeModifiers(modifiers)
                 .append("class ")
+                .append(className);
+        firstParameter = true;
+        indent++;
+        return this;
+    }
+
+    /**
+     * Writes the start of an interface declaration.
+     *
+     * @param className The name of the class to write.
+     * @param generator The class generating the source.
+     * @param modifiers The modifiers of the class, if any.
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeInterfaceDeclarationStart(
+            final String className,
+            final Class<?> generator,
+            final Modifier... modifiers) throws IOException {
+        writeIndent()
+                .append("@javax.annotation.Generated(\"")
+                .append(generator.getCanonicalName())
+                .append("\")")
+                .append(CRLF);
+        writeIndent();
+        writeModifiers(modifiers)
+                .append("interface ")
                 .append(className);
         firstParameter = true;
         indent++;
@@ -448,6 +494,32 @@ public class SourceFileWriter implements Closeable {
     }
 
     /**
+     * Writes the end of a method declaration.
+     *
+     * @param throwTypes The types thrown by the method, if any.
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeInterfaceMethodDeclarationEnd(final String... throwTypes) throws IOException {
+        write(")");
+
+        if (throwTypes.length > 0) {
+            write(" throws").write(CRLF);
+            for (int i = 0; i < throwTypes.length; i++) {
+                if (i > 0) {
+                    write(",").write(CRLF);
+                }
+                writeIndent().write(throwTypes[i]);
+            }
+        }
+
+        write(";")
+                .write(CRLF);
+        indent--;
+        return this;
+    }
+
+    /**
      * Writes an assignment statement.
      *
      * @param target The field or variable to be assigned.
@@ -460,6 +532,34 @@ public class SourceFileWriter implements Closeable {
             final String value) throws IOException {
         writeIndent()
                 .append(target)
+                .append(" = ")
+                .append(value)
+                .append(";")
+                .append(CRLF);
+        return this;
+    }
+
+    /**
+     * Writes a declaration and assignment statement
+     *
+     * @param type Type of the variable to declare
+     * @param name The name of the variable being declared and assigned
+     * @param value The new value to assign to it.
+     * @param modifiers The modifiers of the declared variable
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeDeclarationAndAssignment(
+            final String type,
+            final String name,
+            final String value,
+            final Modifier... modifiers) throws IOException {
+        writeIndent();
+        writeModifiers(modifiers)
+                .append(type)
+                .append(" ")
+                .append(name)
                 .append(" = ")
                 .append(value)
                 .append(";")
@@ -489,6 +589,21 @@ public class SourceFileWriter implements Closeable {
      */
     public SourceFileWriter writeBlockEnd() throws IOException {
         indent--;
+        writeIndent()
+                .append("}")
+                .append(CRLF)
+                .append(CRLF);
+        return this;
+    }
+
+    /**
+     * Writes the end of a block.
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeInterfaceBlockEnd() throws IOException {
+        indent -= 2;
         writeIndent()
                 .append("}")
                 .append(CRLF)
@@ -531,6 +646,55 @@ public class SourceFileWriter implements Closeable {
         }
         indent -= 2;
         write(")");
+        return this;
+    }
+
+    /**
+     * Writes the start of a for loop.
+     *
+     * This should be followed by 0 or more statements and then a single call to
+     * {@link #writeForLoopEnd()}.
+     *
+     * @param loopType Type of the loop variable
+     * @param loopName Name of the loop variable
+     * @param collectionName Name of the collection to iterate over
+     * @param collectionMethod Method to call for iteration, may be an empty
+     * string if the collection itself is iterable.
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeNewForLoopStart(
+            final String loopType,
+            final String loopName,
+            final String collectionName,
+            final String collectionMethod) throws IOException {
+        writeIndent()
+                .append("for (")
+                .append(loopType)
+                .append(" ")
+                .append(loopName)
+                .append(" : ")
+                .append(collectionName);
+        if (!collectionMethod.isEmpty()) {
+            write(".").write(collectionMethod);
+        }
+        write(") {").write(CRLF);
+        indent += 2;
+        return this;
+    }
+
+    /**
+     * Writes the end of a for loop
+     *
+     * @return A reference to this writer, for convenience.
+     * @throws IOException If the operation failed.
+     */
+    public SourceFileWriter writeForLoopEnd() throws IOException {
+        indent -= 2;
+        writeIndent()
+                .append("}")
+                .append(CRLF);
         return this;
     }
 

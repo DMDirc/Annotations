@@ -1,11 +1,11 @@
 package com.dmdirc.util.annotations.observable;
 
 @ObservableModel
-public class TestModel {
+public class OldValueTestModel {
 
     private String test;
 
-    public TestModel(final String test) {
+    public OldValueTestModel(final String test) {
         this.test = test;
     }
 

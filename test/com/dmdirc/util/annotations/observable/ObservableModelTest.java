@@ -12,14 +12,27 @@ import org.junit.Test;
 public class ObservableModelTest {
 
     @Test
-    public void testTestModel() {
+    public void testOldValueTestModel() {
         final String oldValue = "Foo";
         final String newValue = "Bar";
-        ObservableTestModel model = new ObservableTestModel(oldValue);
-        model.addStringListener(new ObservableTestModel.StringListener() {
-            public void stringChanged(String oldValue, String newValue) {
-                assertEquals(oldValue, oldValue);
-                assertEquals(newValue, newValue);
+        ObservableOldValueTestModel model = new ObservableOldValueTestModel(oldValue);
+        model.addStringListener(new ObservableOldValueTestModel.StringListener() {
+            public void stringChanged(String testOldValue, String testNewValue) {
+                assertEquals(oldValue, testOldValue);
+                assertEquals(newValue, testNewValue);
+            }
+        });
+        model.setString(newValue);
+    }
+
+    @Test
+    public void testNewValueTestModel() {
+        final String oldValue = "Foo";
+        final String newValue = "Bar";
+        ObservableNewValueTestModel model = new ObservableNewValueTestModel(oldValue);
+        model.addStringListener(new ObservableNewValueTestModel.StringListener() {
+            public void stringChanged(String testNewValue) {
+                assertEquals(newValue, testNewValue);
             }
         });
         model.setString(newValue);
