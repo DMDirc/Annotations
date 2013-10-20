@@ -29,7 +29,7 @@ import java.lang.annotation.Target;
  * Denotes that an observable subclass should be generated.
  */
 @Target(ElementType.TYPE)
-public @interface Observable {
+public @interface ObservableModel {
 
     /**
      * Custom name for the observable. If not specified, 'Observable' + the class name will be used.
