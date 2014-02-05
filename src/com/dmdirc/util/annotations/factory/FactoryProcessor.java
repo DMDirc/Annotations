@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006-2013 DMDirc Developers
+ * Copyright (c) 2006-2014 DMDirc Developers
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,9 @@ import com.dmdirc.util.annotations.Parameter;
 import com.dmdirc.util.annotations.util.SourceFileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
@@ -42,6 +45,7 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.tools.Diagnostic;
 
@@ -55,10 +59,22 @@ import javax.tools.Diagnostic;
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 public class FactoryProcessor extends AbstractProcessor {
 
-    /** {@inheritDoc} */
+    /**
+     * The fully-qualified names of any elements which are annotated with @Factory but haven't
+     * yet been processed. These may persist across several rounds of generation depending on
+     * their dependencies.
+     */
+    private final List<String> pendingElementNames = new LinkedList<>();
+
     @Override
     public boolean process(final Set<? extends TypeElement> set, final RoundEnvironment roundEnv) {
-        for (Element type : roundEnv.getElementsAnnotatedWith(Factory.class)) {
+        pendingElementNames.addAll(getFactoryClassNames(roundEnv));
+        final Iterator<String> iterator = pendingElementNames.iterator();
+        while (iterator.hasNext()) {
+            // Because we're possibly caching these names across rounds we need to look up each
+            // element from the environment instead of caching.
+            final String name = iterator.next();
+            final Element type = processingEnv.getElementUtils().getTypeElement(name);
             Factory annotation = type.getAnnotation(Factory.class);
 
             if (annotation == null) {
@@ -70,6 +86,7 @@ public class FactoryProcessor extends AbstractProcessor {
 
             final List<Parameter> boundParameters = new ArrayList<>();
             final List<Constructor> constructors = new ArrayList<>();
+            boolean errorFree = true;
 
             for (Element child : type.getEnclosedElements()) {
                 if (child.getKind() == ElementKind.CONSTRUCTOR) {
@@ -77,6 +94,14 @@ public class FactoryProcessor extends AbstractProcessor {
 
                     ExecutableElement ctor = (ExecutableElement) child;
                     for (VariableElement element : ctor.getParameters()) {
+                        if (element.asType().getKind() == TypeKind.ERROR) {
+                            // Either something bad has happened, or this is the output of an
+                            // annotation processor that's not run yet. Either way, avoid generating
+                            // any bad output.
+                            errorFree = false;
+                            break;
+                        }
+
                         final Parameter param = new Parameter(
                                 element.asType().toString(),
                                 element.getSimpleName().toString(),
@@ -94,19 +119,40 @@ public class FactoryProcessor extends AbstractProcessor {
                 }
             }
 
-            writeFactory(
-                    packageElement.getQualifiedName().toString(),
-                    annotation.name().isEmpty() ?
-                            typeElement.getSimpleName() + "Factory" :
-                            annotation.name(),
-                    typeElement.getSimpleName().toString(),
-                    annotation,
-                    boundParameters,
-                    constructors,
-                    type);
+            if (errorFree) {
+                writeFactory(
+                        packageElement.getQualifiedName().toString(),
+                        annotation.name().isEmpty() ?
+                                typeElement.getSimpleName() + "Factory" :
+                                annotation.name(),
+                        typeElement.getSimpleName().toString(),
+                        annotation,
+                        boundParameters,
+                        constructors,
+                        type);
+                iterator.remove();
+            }
         }
 
         return false;
+    }
+
+    /**
+     * Gets the fully-qualified names of all classes in the given environment that are annotated
+     * with our @Factory annotation.
+     *
+     * @param roundEnv The environment to read elements from
+     * @return A set of all class names that are annotated
+     */
+    private Set<String> getFactoryClassNames(final RoundEnvironment roundEnv) {
+        final Set<? extends Element> elements = roundEnv.getElementsAnnotatedWith(Factory.class);
+        final Set<String> names = new HashSet<>(elements.size());
+        for (Element element : elements) {
+            final PackageElement packageElement = (PackageElement) element.getEnclosingElement();
+            final String packageName = packageElement.getQualifiedName().toString();
+            names.add(packageName + '.' + element.getSimpleName().toString());
+        }
+        return names;
     }
 
     /**
