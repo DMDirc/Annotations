@@ -3,6 +3,7 @@
 
     <configurations>
         <conf name="default" description="Default configuration"/>
+        <conf name="test" description="Testing dependencies"/>
     </configurations>
 
     <publications>
@@ -11,7 +12,8 @@
     </publications>
 
     <dependencies>
-        <dependency org="com.github.shanemcc" name="jgit-describe" rev="0.3" conf="default->default" />
-        <dependency org="javax.inject" name="javax.inject" rev="1" conf="default->default" />
+        <dependency org="com.github.shanemcc" name="jgit-describe" rev="0.3" conf="default->default"/>
+        <dependency org="javax.inject" name="javax.inject" rev="1" conf="default->default"/>
+        <dependency org="junit" name="junit" rev="4.+" conf="test->default"/>
     </dependencies>
 </ivy-module>
