@@ -19,7 +19,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
 package com.dmdirc.util.annotations.factory;
 
 import com.dmdirc.util.annotations.Constructor;
@@ -54,15 +53,14 @@ import javax.tools.Diagnostic;
  */
 @SupportedAnnotationTypes({
     "com.dmdirc.util.annotations.factory.Factory",
-    "com.dmdirc.util.annotations.factory.Unbound",
-})
+    "com.dmdirc.util.annotations.factory.Unbound",})
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 public class FactoryProcessor extends AbstractProcessor {
 
     /**
-     * The fully-qualified names of any elements which are annotated with @Factory but haven't
-     * yet been processed. These may persist across several rounds of generation depending on
-     * their dependencies.
+     * The fully-qualified names of any elements which are annotated with @Factory but haven't yet
+     * been processed. These may persist across several rounds of generation depending on their
+     * dependencies.
      */
     private final List<String> pendingElementNames = new LinkedList<>();
 
@@ -81,8 +79,21 @@ public class FactoryProcessor extends AbstractProcessor {
                 continue;
             }
 
+            if (!(type instanceof TypeElement)) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "Factory annotation can only be applied to classes", type);
+                continue;
+            }
+
             final TypeElement typeElement = (TypeElement) type;
-            final PackageElement packageElement = (PackageElement) typeElement.getEnclosingElement();
+            final Element enclosingElement = type.getEnclosingElement();
+            if (!(enclosingElement instanceof PackageElement)) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "Factory annotation must be applied to outer-classes", enclosingElement);
+                continue;
+            }
+
+            final PackageElement packageElement = (PackageElement) enclosingElement;
 
             final List<Parameter> boundParameters = new ArrayList<>();
             final List<Constructor> constructors = new ArrayList<>();
@@ -122,9 +133,9 @@ public class FactoryProcessor extends AbstractProcessor {
             if (errorFree) {
                 writeFactory(
                         packageElement.getQualifiedName().toString(),
-                        annotation.name().isEmpty() ?
-                                typeElement.getSimpleName() + "Factory" :
-                                annotation.name(),
+                        annotation.name().isEmpty()
+                        ? typeElement.getSimpleName() + "Factory"
+                        : annotation.name(),
                         typeElement.getSimpleName().toString(),
                         annotation,
                         boundParameters,
@@ -148,9 +159,15 @@ public class FactoryProcessor extends AbstractProcessor {
         final Set<? extends Element> elements = roundEnv.getElementsAnnotatedWith(Factory.class);
         final Set<String> names = new HashSet<>(elements.size());
         for (Element element : elements) {
-            final PackageElement packageElement = (PackageElement) element.getEnclosingElement();
-            final String packageName = packageElement.getQualifiedName().toString();
-            names.add(packageName + '.' + element.getSimpleName().toString());
+            final Element enclosingElement = element.getEnclosingElement();
+            if (enclosingElement instanceof PackageElement) {
+                final PackageElement packageElement = (PackageElement) enclosingElement;
+                final String packageName = packageElement.getQualifiedName().toString();
+                names.add(packageName + '.' + element.getSimpleName().toString());
+            } else {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "Factory annotation must be applied to outer-classes", enclosingElement);
+            }
         }
         return names;
     }
@@ -177,8 +194,8 @@ public class FactoryProcessor extends AbstractProcessor {
     }
 
     /**
-     * Gets all the annotations (except the ones declared by this library) of the given element
-     * as a string.
+     * Gets all the annotations (except the ones declared by this library) of the given element as a
+     * string.
      *
      * @param element The element to retrieve annotations for.
      * @return A space-separated string of all annotations and their values.
@@ -284,8 +301,8 @@ public class FactoryProcessor extends AbstractProcessor {
     }
 
     /**
-     * Writes the given type in a Provider&lt;&gt;, if the factory is configured to use them,
-     * if the type is not already a provider, and if the parameter has no annotations.
+     * Writes the given type in a Provider&lt;&gt;, if the factory is configured to use them, if the
+     * type is not already a provider, and if the parameter has no annotations.
      *
      * @param annotation The annotation configuring the factory.
      * @param parameter The parameter to possibly wrap.
